@@ -1,0 +1,33 @@
+# /opt/ansible/playbooks/install-software.yml
+---
+- name: Instalar pacote padrão de software nas estações Windows
+  hosts: windows
+  gather_facts: false
+
+  tasks:
+    - name: Garantir que o Chocolatey está instalado
+      win_chocolatey:
+        name: chocolatey
+        state: present
+
+    - name: Instalar Google Chrome
+      win_chocolatey:
+        name: googlechrome
+        state: present
+
+    - name: Instalar WinRAR
+      win_chocolatey:
+        name: winrar
+        state: present
+
+    - name: Instalar 7-Zip (opcional, alternativa leve)
+      win_chocolatey:
+        name: 7zip
+        state: present
+      tags: opcional
+
+    - name: Instalar Adobe Reader
+      win_chocolatey:
+        name: adobereader
+        state: present
+      tags: opcional

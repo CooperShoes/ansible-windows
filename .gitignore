@@ -1,0 +1,7 @@
+*.msi
+*.exe
+*.dll
+*.plx
+*.gif
+files/*
+siles/sistema/*

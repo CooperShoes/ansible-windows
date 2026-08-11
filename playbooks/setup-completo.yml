@@ -1,0 +1,10 @@
+# /opt/ansible/playbooks/setup-completo.yml
+---
+- name: Provisionamento completo de estação Windows
+  hosts: windows
+  gather_facts: false
+  roles:
+    - pastas-padrao
+    - software-base
+    - agentes-seguranca
+    - servicos

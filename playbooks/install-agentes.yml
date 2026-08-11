@@ -1,0 +1,45 @@
+# /opt/ansible/playbooks/install-agentes.yml
+---
+- name: Instalar agentes corporativos licenciados
+  hosts: windows
+  gather_facts: false
+
+  vars:
+    origem_instaladores: "/opt/ansible/files/instaladores"
+
+  tasks:
+    - name: Criar pasta temporária de instalação
+      win_file:
+        path: C:\temp\instaladores
+        state: directory
+
+    - name: Copiar instalador do BitDefender
+      win_copy:
+        src: "{{ origem_instaladores }}/setupdownloader_[aHR0cHM6Ly9jbG91ZC1lY3MuZ3Jhdml0eXpvbmUuYml0ZGVmZW5kZXIuY29tL1BhY2thZ2VzL0JTVFdJTi8wL3VTZTRvQy9pbnN0YWxsZXIueG1sP2xhbmc9cHQtQlI=].exe"
+        dest: C:\temp\instaladores\setupdownloader_[aHR0cHM6Ly9jbG91ZC1lY3MuZ3Jhdml0eXpvbmUuYml0ZGVmZW5kZXIuY29tL1BhY2thZ2VzL0JTVFdJTi8wL3VTZTRvQy9pbnN0YWxsZXIueG1sP2xhbmc9cHQtQlI=].exe
+
+    - name: Instalar BitDefender silenciosamente
+      win_command: C:\temp\instaladores\setupdownloader_[aHR0cHM6Ly9jbG91ZC1lY3MuZ3Jhdml0eXpvbmUuYml0ZGVmZW5kZXIuY29tL1BhY2thZ2VzL0JTVFdJTi8wL3VTZTRvQy9pbnN0YWxsZXIueG1sP2xhbmc9cHQtQlI=].exe /silent /suppressmsgbox
+      args:
+        creates: C:\Program Files\Bitdefender\Endpoint Security\product.console.exe
+
+    - name: Copiar instalador do WatchGuard EDR
+      win_copy:
+        src: "{{ origem_instaladores }}/WatchGuard Endpoint Agent.msi"
+        dest: C:\temp\instaladores\WatchGuard Endpoint Agent.msi
+
+    - name: Instalar WatchGuard EDR
+      win_package:
+        path: C:\temp\instaladores\WatchGuard Endpoint Agent.msi
+        state: present
+        arguments: /quiet /norestart
+
+    - name: Copiar instalador do Office 365 (ODT já configurado com configuration.xml)
+      win_copy:
+        src: "{{ origem_instaladores }}/office365/"
+        dest: C:\temp\instaladores\office365\
+
+    - name: Rodar Office Deployment Tool
+      win_command: C:\temp\instaladores\office365\setup.exe /configure C:\temp\instaladores\office365\configuration.xml
+      args:
+        creates: C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE
