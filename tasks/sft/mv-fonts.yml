@@ -1,0 +1,42 @@
+---
+- name: Instalar fontes
+  hosts: windows
+  gather_facts: false
+
+  vars:
+    origem_instaladores: "/opt/ansible/files/sistema"
+    fonts_origem: "{{ origem_instaladores }}/fonts/"
+
+  tasks:
+
+    - name: Criar diretório temporário
+      ansible.windows.win_file:
+        path: 'C:\temp\fonts'
+        state: directory
+
+    - name: Copiar fontes para diretório temporário
+      ansible.windows.win_copy:
+        src: "{{ fonts_origem }}"
+        dest: 'C:\temp\fonts\'
+      register: resultado_fonts
+
+    - name: Instalar fontes no Windows
+      ansible.windows.win_shell: |
+        $fontsFolder = 'C:\Windows\Fonts'
+        $sourceFolder = 'C:\temp\fonts'
+
+        $shell = New-Object -ComObject Shell.Application
+        $fontsNamespace = $shell.Namespace(0x14)
+
+        Get-ChildItem -Path $sourceFolder -Include *.ttf,*.otf -Recurse | ForEach-Object {
+            $fontsNamespace.CopyHere($_.FullName, 0x10)
+        }
+
+        Start-Sleep -Seconds 3
+      register: resultado_instalacao
+
+    - name: Relatório de distribuição das fontes
+      ansible.builtin.debug:
+        msg:
+          - 'Fontes copiadas para temporário ........ {{ "OK" if resultado_fonts is succeeded else "FALHOU" }}'
+          - 'Instalação das fontes .................. {{ "OK" if resultado_instalacao is succeeded else "FALHOU" }}'

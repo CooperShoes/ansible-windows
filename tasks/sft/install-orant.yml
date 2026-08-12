@@ -1,0 +1,38 @@
+# tasks/install-orant.yml
+---
+- name: Instalar Orant
+  hosts: windows
+  gather_facts: false
+
+  vars:
+    origem_instaladores: "/opt/ansible/files/sistema/orant"
+    orant_zip: "orant.zip"
+
+  tasks:
+    - name: Criar pasta temporária de instalação
+      win_file:
+        path: C:\Temp
+        state: directory
+      ignore_errors: true
+
+    - name: Copiar zip do Orant
+      win_copy:
+        src: "{{ origem_instaladores }}/{{ orant_zip }}"
+        dest: 'C:\Temp\{{ orant_zip }}'
+      register: resultado_copia_zip
+      ignore_errors: true
+
+    - name: Descompactar arquivo direto em C:\
+      community.windows.win_unzip:
+        src: 'C:\Temp\{{ orant_zip }}'
+        dest: 'C:\'
+        delete_archive: true
+      register: resultado_unzip
+      ignore_errors: true
+      when: resultado_copia_zip is success
+
+    - name: Relatório de instalação
+      debug:
+        msg:
+          - "Cópia do ZIP ..... {{ 'OK' if (resultado_copia_zip is defined and resultado_copia_zip is success) else 'FALHOU' }}"
+          - "Descompactação .... {{ 'OK' if (resultado_unzip is defined and resultado_unzip is success) else 'FALHOU' }}"

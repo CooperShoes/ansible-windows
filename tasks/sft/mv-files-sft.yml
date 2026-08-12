@@ -1,0 +1,74 @@
+# playbooks/mv-files-sft.yml
+---
+- name: Copiar arquivos necessários para o ERP (SFT) funcionar
+  hosts: windows
+  gather_facts: false
+
+  vars:
+    origem_instaladores: "/opt/ansible/files/sistema/files-sft"
+    sistemas_lnk: "SISTEMAS.lnk"
+    dest_dirs:
+      - 'C:\Windows\System'
+      - 'C:\Windows\System32'
+      - 'C:\Windows\SysWOW64'
+
+  tasks:
+    # ---------------- d2kwut60.dll ----------------
+    - name: Copiar d2kwut60.dll para System/System32/SysWOW64
+      win_copy:
+        src: "{{ origem_instaladores }}/d2kwut60.dll"
+        dest: '{{ item }}\d2kwut60.dll'
+      loop: "{{ dest_dirs }}"
+      register: resultado_dll
+      ignore_errors: true
+
+    # ---------------- D2KWUT60.pll ----------------
+    - name: Copiar D2KWUT60.pll para System/System32/SysWOW64
+      win_copy:
+        src: "{{ origem_instaladores }}/D2KWUT60.pll"
+        dest: '{{ item }}\D2KWUT60.pll'
+      loop: "{{ dest_dirs }}"
+      register: resultado_pll
+      ignore_errors: true
+
+    # ---------------- D2KWUT60.plx ----------------
+    - name: Copiar D2KWUT60.plx para System/System32/SysWOW64
+      win_copy:
+        src: "{{ origem_instaladores }}/D2KWUT60.plx"
+        dest: '{{ item }}\D2KWUT60.plx'
+      loop: "{{ dest_dirs }}"
+      register: resultado_plx
+      ignore_errors: true
+
+    # ---------------- C:\temp ----------------
+    - name: Criar C:\temp
+      win_file:
+        path: C:\temp
+        state: directory
+      ignore_errors: true
+
+    # ---------------- Atalho SISTEMAS.lnk ----------------
+    - name: Copiar SISTEMAS.lnk para C:\temp
+      win_copy:
+        src: "{{ origem_instaladores }}/{{ sistemas_lnk }}"
+        dest: 'C:\temp\{{ sistemas_lnk }}'
+      register: resultado_sistemas
+      ignore_errors: true
+
+    # ---------------- XERPoratoolsBINifrun60.EXE.txt ----------------
+    - name: Copiar XERPoratoolsBINifrun60.EXE.txt para C:\temp
+      win_copy:
+        src: "{{ origem_instaladores }}/XERPoratoolsBINifrun60.EXE.txt"
+        dest: 'C:\temp\XERPoratoolsBINifrun60.EXE.txt'
+      register: resultado_txt
+      ignore_errors: true
+
+    # ---------------- Relatório final ----------------
+    - name: Relatório de cópia dos arquivos do SFT
+      debug:
+        msg:
+          - "d2kwut60.dll (3 destinos) .......... {{ 'OK' if (resultado_dll is defined and resultado_dll is success) else 'FALHOU (ver detalhes acima)' }}"
+          - "D2KWUT60.pll (3 destinos) .......... {{ 'OK' if (resultado_pll is defined and resultado_pll is success) else 'FALHOU (ver detalhes acima)' }}"
+          - "D2KWUT60.plx (3 destinos) .......... {{ 'OK' if (resultado_plx is defined and resultado_plx is success) else 'FALHOU (ver detalhes acima)' }}"
+          - "SISTEMAS.lnk -> C:\\temp ............ {{ 'OK' if (resultado_sistemas is defined and resultado_sistemas is success) else 'FALHOU' }}"
+          - "XERPoratoolsBINifrun60.EXE.txt ...... {{ 'OK' if (resultado_txt is defined and resultado_txt is success) else 'FALHOU' }}"

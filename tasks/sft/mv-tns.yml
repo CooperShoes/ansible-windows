@@ -1,0 +1,48 @@
+# tasks/mv-tns.yml
+---
+- name: Distribuir tnsnames.ora (Orant + Oracle Client 10G)
+  hosts: windows
+  gather_facts: false
+
+  vars:
+    origem_instaladores: "/opt/ansible/files/sistema"
+    tns_origem: "{{ origem_instaladores }}/tns/TNSNAMES.ORA"
+
+  tasks:
+    # ---------------- Destino 1: Orant (Oracle 8 legado) ----------------
+    - name: Garantir que C:\orant\NET80\ADMIN existe
+      win_file:
+        path: 'C:\orant\NET80\ADMIN'
+        state: directory
+      register: resultado_pasta_orant
+      ignore_errors: true
+
+    - name: Copiar tnsnames.ora para C:\orant\NET80\ADMIN
+      win_copy:
+        src: "{{ tns_origem }}"
+        dest: 'C:\orant\NET80\ADMIN\tnsnames.ora'
+      register: resultado_tns_orant
+      ignore_errors: true
+      when: resultado_pasta_orant is success
+
+    # ---------------- Destino 2: Oracle Client 10G ----------------
+    - name: Garantir que a pasta network\ADMIN do client 10g existe
+      win_file:
+        path: 'C:\oracle\product\10.2.0\client_1\network\ADMIN'
+        state: directory
+      register: resultado_pasta_oracle
+      ignore_errors: true
+
+    - name: Copiar tnsnames.ora para o client 10g
+      win_copy:
+        src: "{{ tns_origem }}"
+        dest: 'C:\oracle\product\10.2.0\client_1\network\ADMIN\tnsnames.ora'
+      register: resultado_tns_oracle
+      ignore_errors: true
+      when: resultado_pasta_oracle is success
+
+    - name: Relatório de distribuição do TNS
+      debug:
+        msg:
+          - "tnsnames.ora -> Orant (NET80) ......... {{ 'OK' if (resultado_tns_orant is defined and resultado_tns_orant is success) else 'FALHOU' }}"
+          - "tnsnames.ora -> Oracle Client 10G ...... {{ 'OK' if (resultado_tns_oracle is defined and resultado_tns_oracle is success) else 'FALHOU' }}"

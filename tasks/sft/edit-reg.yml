@@ -1,0 +1,30 @@
+---
+- name: Aplicar configuração 64BITS
+  hosts: windows
+  gather_facts: false
+
+  vars:
+    origem_instaladores: "/opt/ansible/files/sistema"
+    reg_origem: "{{ origem_instaladores }}/files-sft/64BITS.reg"
+
+  tasks:
+    - name: Criar diretório temporário
+      ansible.windows.win_file:
+        path: 'C:\temp'
+        state: directory
+
+    - name: Copiar arquivo .reg para diretório temporário
+      ansible.windows.win_copy:
+        src: "{{ reg_origem }}"
+        dest: 'C:\temp\64BITS.reg'
+      register: resultado_copia
+
+    - name: Importar arquivo .reg
+      ansible.windows.win_command: 'regedit.exe /s C:\temp\64BITS.reg'
+      register: resultado_reg
+
+    - name: Relatório de aplicação do registro
+      ansible.builtin.debug:
+        msg:
+          - 'Arquivo .reg copiado .................. {{ "OK" if resultado_copia is succeeded else "FALHOU" }}'
+          - 'Registro importado .................... {{ "OK" if resultado_reg is succeeded else "FALHOU" }}'
