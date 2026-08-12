@@ -1,4 +1,3 @@
-# tasks/install-oracle10g.yml
 ---
 - name: Instalar Oracle Client 10G
   hosts: windows
@@ -10,50 +9,46 @@
     oracle_bat: "install-oracle-10g.bat"
 
   tasks:
+
     - name: Criar pasta temporária de instalação
-      win_file:
+      ansible.windows.win_file:
         path: C:\temp
         state: directory
-      ignore_errors: true
 
     - name: Copiar zip do Oracle Client 10G
-      win_copy:
+      ansible.windows.win_copy:
         src: "{{ origem_instaladores }}/{{ oracle_zip }}"
         dest: 'C:\temp\{{ oracle_zip }}'
       register: resultado_copia_zip
-      ignore_errors: true
 
     - name: Descompactar arquivo
       community.windows.win_unzip:
         src: 'C:\temp\{{ oracle_zip }}'
-        dest: C:\temp\oracle-10g
-        delete_archive: true
+        dest: C:\temp
+        delete_archive: false
       register: resultado_unzip
-      ignore_errors: true
       when: resultado_copia_zip is success
 
     - name: Copiar script de instalação
-      win_copy:
+      ansible.windows.win_copy:
         src: "{{ origem_instaladores }}/{{ oracle_bat }}"
-        dest: 'C:\temp\oracle-10g\client\{{ oracle_bat }}'
+        dest: 'C:\temp\client-oracle-10g\{{ oracle_bat }}'
       register: resultado_copia_bat
-      ignore_errors: true
-      when: resultado_unzip is defined and resultado_unzip is success
+      when: resultado_unzip is success
 
     - name: Executar instalação Oracle
-      win_command: "{{ oracle_bat }}"
+      ansible.windows.win_command: "{{ oracle_bat }}"
       args:
-        chdir: 'C:\temp\oracle-10g\client'
+        chdir: 'C:\temp\client-oracle-10g'
         creates: 'C:\oracle\product\10.2.0\client_1\bin\sqlplus.exe'
       async: 1800
       poll: 15
       register: resultado_oracle
-      ignore_errors: true
-      when: resultado_copia_bat is defined and resultado_copia_bat is success
+      when: resultado_copia_bat is success
 
     - name: Relatório de instalação
-      debug:
+      ansible.builtin.debug:
         msg:
-          - "Cópia do ZIP ........ {{ 'OK' if (resultado_copia_zip is defined and resultado_copia_zip is success) else 'FALHOU' }}"
-          - "Descompactação ....... {{ 'OK' if (resultado_unzip is defined and resultado_unzip is success) else 'FALHOU' }}"
-          - "Instalação Oracle .... {{ 'OK' if (resultado_oracle is defined and resultado_oracle is success) else 'FALHOU' }}"
+          - "Cópia do ZIP ........ OK"
+          - "Descompactação ....... OK"
+          - "Instalação Oracle .... {{ 'OK' if resultado_oracle is success else 'FALHOU' }}"

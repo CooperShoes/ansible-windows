@@ -8,14 +8,14 @@
     bitdefender_installer: "setupdownloader_[aHR0cHM6Ly9jbG91ZC1lY3MuZ3Jhdml0eXpvbmUuYml0ZGVmZW5kZXIuY29tL1BhY2thZ2VzL0JTVFdJTi8wL3VTZTRvQy9pbnN0YWxsZXIueG1sP2xhbmc9cHQtQlI=].exe"
     watchguard_installer: "WatchGuard Endpoint Agent.msi"
     office_odt_dir: "office365"
-    anydes_installer: "AnyDesk.exe"
+    anydesk_installer: "AnyDesk.exe"
 
   tasks:
     - name: Criar pasta temporária de instalação
       win_file:
         path: C:\temp\instaladores
         state: directory
-        
+
     # ---------------- AnyDesk --------------------
     - name: Copiar instalador do AnyDesk
       win_copy:

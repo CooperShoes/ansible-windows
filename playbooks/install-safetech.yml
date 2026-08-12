@@ -14,4 +14,4 @@
   import_playbook: ../tasks/sft/mv-files-sft.yml
 
 - name: Copiar fontes
-  import_playbook: ../task/sft/mv-fonts.yml
+  import_playbook: ../tasks/sft/mv-fonts.yml
