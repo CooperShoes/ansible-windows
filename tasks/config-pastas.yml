@@ -1,0 +1,16 @@
+# /opt/ansible/playbooks/config-pastas.yml
+---
+- name: Configurações padrão de pastas e arquivos
+  hosts: windows
+  gather_facts: false
+
+  tasks:
+    - name: Criar C:\temp
+      win_file:
+        path: C:\temp
+        state: directory
+
+    - name: Criar C:\lixo
+      win_file:
+        path: C:\lixo
+        state: directory
