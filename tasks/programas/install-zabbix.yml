@@ -1,0 +1,101 @@
+---
+- name: Instalar Zabbix Agent 2
+  hosts: windows
+  connection: winrm
+  gather_facts: false
+
+  vars:
+    zabbix_server: "192.168.0.133"
+    zabbix_api_url: "http://192.168.0.133:8080/api_jsonrpc.php"
+
+    zabbix_group_id: ""
+    zabbix_template_id: "10351"
+
+    zabbix_msi: "/opt/ansible/files/instaladores/zabbix_agent2-7.4.13-windows-amd64-openssl.msi"
+    zabbix_msi_dest: "C:\\Temp\\zabbix_agent2.msi"
+
+  tasks:
+
+    - name: Obter hostname
+      ansible.windows.win_command: hostname
+      register: hostname_result
+      changed_when: false
+
+    - name: Criar pasta temporária
+      ansible.windows.win_file:
+        path: "C:\\Temp"
+        state: directory
+
+    - name: Copiar instalador
+      ansible.windows.win_copy:
+        src: "{{ zabbix_msi }}"
+        dest: "{{ zabbix_msi_dest }}"
+
+    - name: Instalar Zabbix Agent 2
+      ansible.windows.win_package:
+        path: "{{ zabbix_msi_dest }}"
+        state: present
+        arguments:
+          - "SERVER={{ zabbix_server }}"
+          - "SERVERACTIVE={{ zabbix_server }}"
+          - "HOSTNAME={{ hostname_result.stdout | trim }}"
+
+    - name: Iniciar Zabbix Agent 2
+      ansible.windows.win_service:
+        name: "Zabbix Agent 2"
+        start_mode: auto
+        state: started
+
+    - name: Obter token da API do Zabbix
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: "application/json-rpc"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: "user.login"
+          params:
+            username: "{{ zabbix_api_user }}"
+            password: "{{ zabbix_api_password }}"
+          id: 1
+        return_content: true
+      register: zabbix_login
+      delegate_to: localhost
+      no_log: true
+
+    - name: Cadastrar computador no Zabbix
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: "application/json-rpc"
+          Authorization: "Bearer {{ zabbix_login.json.result }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: "host.create"
+          params:
+            host: "{{ hostname_result.stdout | trim }}"
+            groups:
+              - groupid: "{{ zabbix_group_id }}"
+            templates:
+              - templateid: "{{ zabbix_template_id }}"
+            interfaces:
+              - type: 1
+                main: 1
+                useip: 1
+                ip: "{{ ansible_host }}"
+                dns: ""
+                port: "10050"
+          id: 2
+        return_content: true
+      register: zabbix_host
+      delegate_to: localhost
+
+    - name: Mostrar resultado do cadastro
+      ansible.builtin.debug:
+        msg:
+          - "Hostname: {{ hostname_result.stdout | trim }}"
+          - "Zabbix: {{ zabbix_host.json }}"

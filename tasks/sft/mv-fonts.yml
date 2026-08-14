@@ -2,9 +2,10 @@
 - name: Instalar fontes
   hosts: windows
   gather_facts: false
+  serial: 1
 
   vars:
-    origem_instaladores: "/opt/ansible/files/sistema"
+    origem_instaladores: "{{ files_root }}/sistema"
     fonts_origem: "{{ origem_instaladores }}/fonts/"
 
   tasks:
@@ -20,23 +21,53 @@
         dest: 'C:\temp\fonts\'
       register: resultado_fonts
 
-    - name: Instalar fontes no Windows
-      ansible.windows.win_shell: |
-        $fontsFolder = 'C:\Windows\Fonts'
-        $sourceFolder = 'C:\temp\fonts'
+    - name: Localizar fontes para instalação
+      ansible.windows.win_find:
+        paths: 'C:\temp\fonts'
+        patterns:
+          - '*.ttf'
+          - '*.otf'
+        recurse: true
+      register: fontes_encontradas
 
-        $shell = New-Object -ComObject Shell.Application
-        $fontsNamespace = $shell.Namespace(0x14)
+    - name: Garantir que fontes foram encontradas
+      ansible.builtin.assert:
+        that: fontes_encontradas.matched | int > 0
+        fail_msg: 'Nenhuma fonte .ttf ou .otf foi encontrada no pacote informado.'
+
+    - name: Instalar somente as fontes ainda ausentes
+      ansible.windows.win_shell: |
+        $sourceFolder = 'C:\temp\fonts'
+        $fontsFolder = 'C:\Windows\Fonts'
+        $fontsNamespace = (New-Object -ComObject Shell.Application).Namespace(0x14)
+        $changed = $false
 
         Get-ChildItem -Path $sourceFolder -Include *.ttf,*.otf -Recurse | ForEach-Object {
+          $destination = Join-Path $fontsFolder $_.Name
+          if (-not (Test-Path -LiteralPath $destination)) {
             $fontsNamespace.CopyHere($_.FullName, 0x10)
+            $changed = $true
+          }
         }
 
-        Start-Sleep -Seconds 3
+        if ($changed) {
+          'changed'
+        } else {
+          'ok'
+        }
       register: resultado_instalacao
+      changed_when: resultado_instalacao.stdout is search('changed')
 
     - name: Relatório de distribuição das fontes
       ansible.builtin.debug:
         msg:
           - 'Fontes copiadas para temporário ........ {{ "OK" if resultado_fonts is succeeded else "FALHOU" }}'
           - 'Instalação das fontes .................. {{ "OK" if resultado_instalacao is succeeded else "FALHOU" }}'
+
+    - name: Salvar log da instalação de fontes
+      ansible.builtin.include_tasks: ../common/write-execution-log.yml
+      vars:
+        log_name: mv-fonts
+        log_entries:
+          - "Fontes encontradas: {{ fontes_encontradas.matched }}"
+          - "Instalação das fontes: {{ 'OK' if resultado_instalacao is succeeded else 'FALHOU' }}"

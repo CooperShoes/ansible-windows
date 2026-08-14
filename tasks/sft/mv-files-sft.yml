@@ -3,72 +3,142 @@
 - name: Copiar arquivos necessários para o ERP (SFT) funcionar
   hosts: windows
   gather_facts: false
+  serial: 1
 
   vars:
-    origem_instaladores: "/opt/ansible/files/sistema/files-sft"
+    origem_instaladores: "{{ files_root }}/sistema/files-sft"
     sistemas_lnk: "SISTEMAS.lnk"
-    dest_dirs:
-      - 'C:\Windows\System'
-      - 'C:\Windows\System32'
-      - 'C:\Windows\SysWOW64'
 
   tasks:
-    # ---------------- d2kwut60.dll ----------------
-    - name: Copiar d2kwut60.dll para System/System32/SysWOW64
-      win_copy:
-        src: "{{ origem_instaladores }}/d2kwut60.dll"
-        dest: '{{ item }}\d2kwut60.dll'
-      loop: "{{ dest_dirs }}"
-      register: resultado_dll
-      ignore_errors: true
-
-    # ---------------- D2KWUT60.pll ----------------
-    - name: Copiar D2KWUT60.pll para System/System32/SysWOW64
-      win_copy:
-        src: "{{ origem_instaladores }}/D2KWUT60.pll"
-        dest: '{{ item }}\D2KWUT60.pll'
-      loop: "{{ dest_dirs }}"
-      register: resultado_pll
-      ignore_errors: true
-
-    # ---------------- D2KWUT60.plx ----------------
-    - name: Copiar D2KWUT60.plx para System/System32/SysWOW64
-      win_copy:
-        src: "{{ origem_instaladores }}/D2KWUT60.plx"
-        dest: '{{ item }}\D2KWUT60.plx'
-      loop: "{{ dest_dirs }}"
-      register: resultado_plx
-      ignore_errors: true
 
     # ---------------- C:\temp ----------------
     - name: Criar C:\temp
-      win_file:
+      ansible.windows.win_file:
         path: C:\temp
         state: directory
-      ignore_errors: true
+
+    # ---------------- Copiar DLL para C:\temp ----------------
+    - name: Copiar d2kwut60.dll para C:\temp
+      ansible.windows.win_copy:
+        src: "{{ origem_instaladores }}/d2kwut60.dll"
+        dest: 'C:\temp\d2kwut60.dll'
+
+    # ---------------- Copiar DLL para System/System32/SysWOW64 ----------------
+    - name: Copiar d2kwut60.dll para System, System32 e SysWOW64
+      ansible.windows.win_shell: |
+        Copy-Item -Path "C:\temp\d2kwut60.dll" `
+                  -Destination "C:\Windows\System\d2kwut60.dll" `
+                  -Force
+
+        Copy-Item -Path "C:\temp\d2kwut60.dll" `
+                  -Destination "C:\Windows\System32\d2kwut60.dll" `
+                  -Force
+
+        Copy-Item -Path "C:\temp\d2kwut60.dll" `
+                  -Destination "C:\Windows\SysWOW64\d2kwut60.dll" `
+                  -Force
+
+    # ---------------- Copiar PLL para C:\temp ----------------
+    - name: Copiar D2KWUT60.pll para C:\temp
+      ansible.windows.win_copy:
+        src: "{{ origem_instaladores }}/D2KWUT60.pll"
+        dest: 'C:\temp\D2KWUT60.pll'
+
+    # ---------------- Copiar PLL para System/System32/SysWOW64 ----------------
+    - name: Copiar D2KWUT60.pll para System, System32 e SysWOW64
+      ansible.windows.win_shell: |
+        Copy-Item -Path "C:\temp\D2KWUT60.pll" `
+                  -Destination "C:\Windows\System\D2KWUT60.pll" `
+                  -Force
+
+        Copy-Item -Path "C:\temp\D2KWUT60.pll" `
+                  -Destination "C:\Windows\System32\D2KWUT60.pll" `
+                  -Force
+
+        Copy-Item -Path "C:\temp\D2KWUT60.pll" `
+                  -Destination "C:\Windows\SysWOW64\D2KWUT60.pll" `
+                  -Force
+
+    # ---------------- Copiar PLX para C:\temp ----------------
+    - name: Copiar D2KWUT60.plx para C:\temp
+      ansible.windows.win_copy:
+        src: "{{ origem_instaladores }}/D2KWUT60.plx"
+        dest: 'C:\temp\D2KWUT60.plx'
+
+    # ---------------- Copiar PLX para System/System32/SysWOW64 ----------------
+    - name: Copiar D2KWUT60.plx para System, System32 e SysWOW64
+      ansible.windows.win_shell: |
+        Copy-Item -Path "C:\temp\D2KWUT60.plx" `
+                  -Destination "C:\Windows\System\D2KWUT60.plx" `
+                  -Force
+
+        Copy-Item -Path "C:\temp\D2KWUT60.plx" `
+                  -Destination "C:\Windows\System32\D2KWUT60.plx" `
+                  -Force
+
+        Copy-Item -Path "C:\temp\D2KWUT60.plx" `
+                  -Destination "C:\Windows\SysWOW64\D2KWUT60.plx" `
+                  -Force
 
     # ---------------- Atalho SISTEMAS.lnk ----------------
     - name: Copiar SISTEMAS.lnk para C:\temp
-      win_copy:
+      ansible.windows.win_copy:
         src: "{{ origem_instaladores }}/{{ sistemas_lnk }}"
         dest: 'C:\temp\{{ sistemas_lnk }}'
       register: resultado_sistemas
-      ignore_errors: true
 
     # ---------------- XERPoratoolsBINifrun60.EXE.txt ----------------
     - name: Copiar XERPoratoolsBINifrun60.EXE.txt para C:\temp
-      win_copy:
+      ansible.windows.win_copy:
         src: "{{ origem_instaladores }}/XERPoratoolsBINifrun60.EXE.txt"
         dest: 'C:\temp\XERPoratoolsBINifrun60.EXE.txt'
       register: resultado_txt
-      ignore_errors: true
+
+    # ---------------- Validar arquivos ----------------
+    - name: Validar arquivos do SFT
+      ansible.windows.win_stat:
+        path: "{{ item }}"
+      loop:
+        - 'C:\Windows\System\d2kwut60.dll'
+        - 'C:\Windows\System32\d2kwut60.dll'
+        - 'C:\Windows\SysWOW64\d2kwut60.dll'
+        - 'C:\Windows\System\D2KWUT60.pll'
+        - 'C:\Windows\System32\D2KWUT60.pll'
+        - 'C:\Windows\SysWOW64\D2KWUT60.pll'
+        - 'C:\Windows\System\D2KWUT60.plx'
+        - 'C:\Windows\System32\D2KWUT60.plx'
+        - 'C:\Windows\SysWOW64\D2KWUT60.plx'
+      register: arquivos_sft
 
     # ---------------- Relatório final ----------------
     - name: Relatório de cópia dos arquivos do SFT
-      debug:
+      ansible.builtin.debug:
         msg:
-          - "d2kwut60.dll (3 destinos) .......... {{ 'OK' if (resultado_dll is defined and resultado_dll is success) else 'FALHOU (ver detalhes acima)' }}"
-          - "D2KWUT60.pll (3 destinos) .......... {{ 'OK' if (resultado_pll is defined and resultado_pll is success) else 'FALHOU (ver detalhes acima)' }}"
-          - "D2KWUT60.plx (3 destinos) .......... {{ 'OK' if (resultado_plx is defined and resultado_plx is success) else 'FALHOU (ver detalhes acima)' }}"
+          - "DLL System ........ {{ 'OK' if arquivos_sft.results[0].stat.exists else 'FALHOU' }}"
+          - "DLL System32 ........ {{ 'OK' if arquivos_sft.results[0].stat.exists else 'FALHOU' }}"
+          - "DLL SysWOW64 ........ {{ 'OK' if arquivos_sft.results[1].stat.exists else 'FALHOU' }}"
+          - "PLL System ........ {{ 'OK' if arquivos_sft.results[2].stat.exists else 'FALHOU' }}"
+          - "PLL System32 ........ {{ 'OK' if arquivos_sft.results[2].stat.exists else 'FALHOU' }}"
+          - "PLL SysWOW64 ........ {{ 'OK' if arquivos_sft.results[3].stat.exists else 'FALHOU' }}"
+          - "PLX System ........ {{ 'OK' if arquivos_sft.results[4].stat.exists else 'FALHOU' }}"
+          - "PLX System32 ........ {{ 'OK' if arquivos_sft.results[4].stat.exists else 'FALHOU' }}"
+          - "PLX SysWOW64 ........ {{ 'OK' if arquivos_sft.results[5].stat.exists else 'FALHOU' }}"
           - "SISTEMAS.lnk -> C:\\temp ............ {{ 'OK' if (resultado_sistemas is defined and resultado_sistemas is success) else 'FALHOU' }}"
           - "XERPoratoolsBINifrun60.EXE.txt ...... {{ 'OK' if (resultado_txt is defined and resultado_txt is success) else 'FALHOU' }}"
+
+    # ---------------- Log ----------------
+    - name: Salvar log da cópia de arquivos do SafeTech
+      ansible.builtin.include_tasks: ../common/write-execution-log.yml
+      vars:
+        log_name: mv-files-sft
+        log_entries:
+          - "DLL System: {{ 'OK' if arquivos_sft.results[0].stat.exists else 'FALHOU' }}"
+          - "DLL System32: {{ 'OK' if arquivos_sft.results[0].stat.exists else 'FALHOU' }}"
+          - "DLL SysWOW64: {{ 'OK' if arquivos_sft.results[1].stat.exists else 'FALHOU' }}"
+          - "PLL System: {{ 'OK' if arquivos_sft.results[2].stat.exists else 'FALHOU' }}"
+          - "PLL System32: {{ 'OK' if arquivos_sft.results[2].stat.exists else 'FALHOU' }}"
+          - "PLL SysWOW64: {{ 'OK' if arquivos_sft.results[3].stat.exists else 'FALHOU' }}"
+          - "PLX System: {{ 'OK' if arquivos_sft.results[4].stat.exists else 'FALHOU' }}"
+          - "PLX System32: {{ 'OK' if arquivos_sft.results[4].stat.exists else 'FALHOU' }}"
+          - "PLX SysWOW64: {{ 'OK' if arquivos_sft.results[5].stat.exists else 'FALHOU' }}"
+          - "Atalho SISTEMAS: {{ 'OK' if resultado_sistemas is succeeded else 'FALHOU' }}"

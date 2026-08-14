@@ -3,46 +3,78 @@
 - name: Distribuir tnsnames.ora (Orant + Oracle Client 10G)
   hosts: windows
   gather_facts: false
+  serial: 1
 
   vars:
-    origem_instaladores: "/opt/ansible/files/sistema"
+    origem_instaladores: "{{ files_root }}/sistema"
     tns_origem: "{{ origem_instaladores }}/tns/TNSNAMES.ORA"
 
   tasks:
+    - name: Validar instalação do Orant
+      ansible.windows.win_stat:
+        path: 'C:\orant\BIN\SQLPLUS.EXE'
+      register: stat_orant
+
+    - name: Validar instalação do Oracle Client 10G
+      ansible.windows.win_stat:
+        path: 'C:\oracle\product\10.2.0\client_1\bin\sqlplus.exe'
+      register: stat_oracle
+
+    - name: Garantir pré-requisitos do TNS
+      ansible.builtin.assert:
+        that:
+          - stat_orant.stat.exists
+          - stat_oracle.stat.exists
+        fail_msg: 'Orant e Oracle Client 10G devem estar instalados antes da distribuição do TNS.'
+
     # ---------------- Destino 1: Orant (Oracle 8 legado) ----------------
     - name: Garantir que C:\orant\NET80\ADMIN existe
-      win_file:
+      ansible.windows.win_file:
         path: 'C:\orant\NET80\ADMIN'
         state: directory
       register: resultado_pasta_orant
-      ignore_errors: true
 
     - name: Copiar tnsnames.ora para C:\orant\NET80\ADMIN
-      win_copy:
+      ansible.windows.win_copy:
         src: "{{ tns_origem }}"
         dest: 'C:\orant\NET80\ADMIN\tnsnames.ora'
       register: resultado_tns_orant
-      ignore_errors: true
       when: resultado_pasta_orant is success
 
     # ---------------- Destino 2: Oracle Client 10G ----------------
     - name: Garantir que a pasta network\ADMIN do client 10g existe
-      win_file:
+      ansible.windows.win_file:
         path: 'C:\oracle\product\10.2.0\client_1\network\ADMIN'
         state: directory
       register: resultado_pasta_oracle
-      ignore_errors: true
 
     - name: Copiar tnsnames.ora para o client 10g
-      win_copy:
+      ansible.windows.win_copy:
         src: "{{ tns_origem }}"
         dest: 'C:\oracle\product\10.2.0\client_1\network\ADMIN\tnsnames.ora'
       register: resultado_tns_oracle
-      ignore_errors: true
       when: resultado_pasta_oracle is success
 
+    - name: Configurar ambiente do Oracle Client para uso do TNS
+      ansible.builtin.include_tasks: ../common/configure-oracle-environment.yml
+
+    - name: Validar resolução do alias COOPER pelo Oracle Client
+      ansible.windows.win_command: 'C:\oracle\product\10.2.0\client_1\bin\tnsping.exe COOPER'
+      register: resultado_tnsping
+      changed_when: false
+
     - name: Relatório de distribuição do TNS
-      debug:
+      ansible.builtin.debug:
         msg:
           - "tnsnames.ora -> Orant (NET80) ......... {{ 'OK' if (resultado_tns_orant is defined and resultado_tns_orant is success) else 'FALHOU' }}"
           - "tnsnames.ora -> Oracle Client 10G ...... {{ 'OK' if (resultado_tns_oracle is defined and resultado_tns_oracle is success) else 'FALHOU' }}"
+          - "TNSPING COOPER ........................ {{ 'OK' if resultado_tnsping is succeeded else 'FALHOU' }}"
+
+    - name: Salvar log da distribuição do TNS
+      ansible.builtin.include_tasks: ../common/write-execution-log.yml
+      vars:
+        log_name: mv-tns
+        log_entries:
+          - "TNS Orant: {{ 'OK' if resultado_tns_orant is succeeded else 'FALHOU' }}"
+          - "TNS Oracle Client 10G: {{ 'OK' if resultado_tns_oracle is succeeded else 'FALHOU' }}"
+          - "TNSPING COOPER: {{ 'OK' if resultado_tnsping is succeeded else 'FALHOU' }}"

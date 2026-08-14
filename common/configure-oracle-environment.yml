@@ -1,0 +1,23 @@
+---
+- name: Configurar PATH e TNS_ADMIN do Oracle Client 10G
+  ansible.windows.win_shell: |
+    $oracleHome = 'C:\oracle\product\10.2.0\client_1'
+    $oracleBin = Join-Path $oracleHome 'bin'
+    $tnsAdmin = Join-Path $oracleHome 'network\ADMIN'
+    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+    $pathEntries = @($machinePath -split ';' | Where-Object { $_.Trim() })
+    $changed = $false
+
+    if ($pathEntries -notcontains $oracleBin) {
+      [Environment]::SetEnvironmentVariable('Path', (($pathEntries + $oracleBin) -join ';'), 'Machine')
+      $changed = $true
+    }
+
+    if ([Environment]::GetEnvironmentVariable('TNS_ADMIN', 'Machine') -ne $tnsAdmin) {
+      [Environment]::SetEnvironmentVariable('TNS_ADMIN', $tnsAdmin, 'Machine')
+      $changed = $true
+    }
+
+    if ($changed) { 'changed' } else { 'unchanged' }
+  register: resultado_ambiente_oracle
+  changed_when: resultado_ambiente_oracle.stdout is search('changed')

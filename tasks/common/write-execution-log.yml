@@ -1,0 +1,29 @@
+---
+# Variáveis esperadas: log_name e log_entries (lista de linhas).
+- name: Garantir diretório de logs no host Windows
+  ansible.windows.win_file:
+    path: "{{ remote_log_dir }}"
+    state: directory
+
+- name: Salvar resumo da etapa no host Windows
+  ansible.windows.win_shell: |
+    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss K'
+    @"
+    [$timestamp] {{ log_name }}
+    Host: {{ inventory_hostname }}
+    {{ log_entries | join("`r`n") }}
+    "@ | Set-Content -Path '{{ remote_log_dir }}\\{{ log_name }}.log' -Encoding UTF8
+  changed_when: false
+
+- name: Garantir diretório de logs no controlador
+  ansible.builtin.file:
+    path: "{{ local_log_dir }}/{{ inventory_hostname }}"
+    state: directory
+    mode: '0750'
+  delegate_to: localhost
+
+- name: Copiar resumo da etapa para o controlador
+  ansible.builtin.fetch:
+    src: "{{ remote_log_dir }}\\{{ log_name }}.log"
+    dest: "{{ local_log_dir }}/{{ inventory_hostname }}/{{ log_name }}.log"
+    flat: true

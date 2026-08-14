@@ -1,0 +1,5 @@
+---
+# Caminhos comuns ao controlador e aos hosts Windows.
+files_root: "{{ inventory_dir }}/../files"
+remote_log_dir: 'C:\\temp\\logs-ansible'
+local_log_dir: "{{ inventory_dir }}/../logs"

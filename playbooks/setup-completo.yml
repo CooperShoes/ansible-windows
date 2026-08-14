@@ -2,13 +2,13 @@
 # Orquestra os playbooks individuais em sequência, na ordem correta:
 ---
 - name: Configurações de pastas padrão
-  import_playbook: ../tasks/config-pastas.yml
+  import_playbook: ../tasks/windows/config-pastas.yml
 
 - name: Instalação de software base (Chocolatey)
-  import_playbook: ../tasks/install-software.yml
+  import_playbook: ../tasks/programas/install-software.yml
 
 - name: Instalação de agentes corporativos licenciados
-  import_playbook: ../tasks/install-agentes.yml
+  import_playbook: ../tasks/programas/install-agentes.yml
 
 - name: Instalação do ERP SafeTech
   import_playbook: install-safetech.yml

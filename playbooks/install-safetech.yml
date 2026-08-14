@@ -1,17 +1,31 @@
 # playbooks/install-safetech.yml
-# Orquestra a instalação completa do ambiente SafeTech (Orant + Oracle 10G + TNS + arquivos do ERP)
+# Orquestra o SafeTech: Orant, registro 64-bit, Oracle 10G, ambiente Oracle,
+# TNS, arquivos do ERP e fontes. Cada etapa salva logs no host e no controlador.
 ---
 - name: Instalar Orant (Oracle 8 legado)
   import_playbook: ../tasks/sft/install-orant.yml
+  tags: [orant]
+
+- name: Aplicar configuração de registro do Orant em 64 bits
+  import_playbook: ../tasks/sft/edit-reg.yml
+  tags: [orant, registro]
 
 - name: Instalar Oracle Client 10G
   import_playbook: ../tasks/sft/install-oracle-10g.yml
-
-- name: Distribuir tnsnames.ora
-  import_playbook: ../tasks/sft/mv-tns.yml
+  tags: [oracle10g]
 
 - name: Copiar arquivos do ERP (SafeTech)
   import_playbook: ../tasks/sft/mv-files-sft.yml
+  tags: [arquivos_erp]
 
 - name: Copiar fontes
   import_playbook: ../tasks/sft/mv-fonts.yml
+  tags: [fontes]
+
+- name: Distribuir tnsnames.ora
+  import_playbook: ../tasks/sft/mv-tns.yml
+  tags: [tns]
+
+- name: Aplica configuração de registro do windows
+  import_playbook: ../tasks/sft/edit-reg.yml
+  tags: [reg]

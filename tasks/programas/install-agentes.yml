@@ -2,9 +2,10 @@
 - name: Instalar agentes corporativos licenciados
   hosts: windows
   gather_facts: false
+  serial: 1
 
   vars:
-    origem_instaladores: "/opt/ansible/files/instaladores"
+    origem_instaladores: "{{ files_root }}/instaladores"
     bitdefender_installer: "setupdownloader_[aHR0cHM6Ly9jbG91ZC1lY3MuZ3Jhdml0eXpvbmUuYml0ZGVmZW5kZXIuY29tL1BhY2thZ2VzL0JTVFdJTi8wL3VTZTRvQy9pbnN0YWxsZXIueG1sP2xhbmc9cHQtQlI=].exe"
     watchguard_installer: "WatchGuard Endpoint Agent.msi"
     office_odt_dir: "office365"
@@ -12,94 +13,93 @@
 
   tasks:
     - name: Criar pasta temporária de instalação
-      win_file:
+      ansible.windows.win_file:
         path: C:\temp\instaladores
         state: directory
 
     # ---------------- AnyDesk --------------------
     - name: Copiar instalador do AnyDesk
-      win_copy:
+      ansible.windows.win_copy:
         src: "{{ origem_instaladores }}/{{ anydesk_installer }}"
         dest: "C:\\temp\\instaladores\\{{ anydesk_installer }}"
       register: resultado_copia_anydesk
-      ignore_errors: true
+
+    - name: Verificar se o AnyDesk já está instalado
+      ansible.windows.win_stat:
+        path: 'C:\Program Files (x86)\AnyDesk\AnyDesk.exe'
+      register: anydesk_instalado
 
     - name: Instalar AnyDesk silenciosamente
-      win_command: >
-        C:\temp\instaladores\{{ anydesk_installer }}
+      ansible.windows.win_command: >
+        "C:\temp\instaladores\AnyDesk.exe"
         --install "C:\Program Files (x86)\AnyDesk"
         --start-with-win
         --silent
-      args:
-        creates: 'C:\Program Files (x86)\AnyDesk\AnyDesk.exe'
       register: resultado_anydesk
-      ignore_errors: true
-      when: resultado_copia_anydesk is success
+      when: not anydesk_instalado.stat.exists
 
     # ---------------- BitDefender ----------------
     - name: Copiar instalador do BitDefender
-      win_copy:
+      ansible.windows.win_copy:
         src: "{{ origem_instaladores }}/{{ bitdefender_installer }}"
         dest: "C:\\temp\\instaladores\\{{ bitdefender_installer }}"
-      register: resultado_copia_bitdefender
-      ignore_errors: true
 
     - name: Instalar BitDefender silenciosamente
-      win_command: "C:\\temp\\instaladores\\{{ bitdefender_installer }} /silent /suppressmsgbox"
+      ansible.windows.win_command: '"C:\temp\instaladores\{{ bitdefender_installer }}" /silent /suppressmsgbox'
       args:
         creates: 'C:\Program Files\Bitdefender\Endpoint Security\product.console.exe'
       register: resultado_bitdefender
-      ignore_errors: true
-      when: resultado_copia_bitdefender is success
-
-    - name: Aguardar o Windows Installer (msiexec) ficar livre
-      win_shell: |
-        while (Get-Process msiexec -ErrorAction SilentlyContinue | Where-Object { $_.SI -ne 0 }) {
-          Start-Sleep -Seconds 5
-        }
-      changed_when: false
-      ignore_errors: true
 
     # ---------------- WatchGuard EDR ----------------
     - name: Copiar instalador do WatchGuard EDR
-      win_copy:
+      ansible.windows.win_copy:
         src: "{{ origem_instaladores }}/{{ watchguard_installer }}"
         dest: "C:\\temp\\instaladores\\{{ watchguard_installer }}"
       register: resultado_copia_watchguard
-      ignore_errors: true
 
     - name: Instalar WatchGuard EDR
-      win_package:
+      ansible.windows.win_package:
         path: "C:\\temp\\instaladores\\{{ watchguard_installer }}"
         state: present
         log_path: 'C:\temp\instaladores\watchguard_install.log'
+        expected_return_code: [0, 3010, 1641]
       register: resultado_watchguard
       retries: 3
       delay: 15
       until: resultado_watchguard is not failed
-      ignore_errors: true
       when: resultado_copia_watchguard is success
 
     # ---------------- Office (via Office Deployment Tool) ----------------
     - name: Copiar pasta do ODT (setup.exe + configuration.xml)
-      win_copy:
+      ansible.windows.win_copy:
         src: "{{ origem_instaladores }}/{{ office_odt_dir }}/"
         dest: "C:\\temp\\instaladores\\{{ office_odt_dir }}\\"
       register: resultado_copia_office
-      ignore_errors: true
 
     - name: Instalar Microsoft 365 Apps via ODT
-      win_command: 'C:\temp\instaladores\{{ office_odt_dir }}\setup.exe /configure C:\temp\instaladores\{{ office_odt_dir }}\configuration.xml'
+      ansible.windows.win_command: 'C:\temp\instaladores\{{ office_odt_dir }}\setup.exe /configure C:\temp\instaladores\{{ office_odt_dir }}\configuration.xml'
       args:
         creates: 'C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE'
       register: resultado_office
-      ignore_errors: true
+      async: 3600
+      poll: 30
       when: resultado_copia_office is success
 
     # ---------------- Relatório final ----------------
     - name: Relatório de instalação
-      debug:
+      ansible.builtin.debug:
         msg:
-          - "BitDefender ..... {{ 'OK' if (resultado_bitdefender is defined and resultado_bitdefender is success) else 'FALHOU' }}"
-          - "WatchGuard EDR ... {{ 'OK' if (resultado_watchguard is defined and resultado_watchguard is success) else 'FALHOU' }}"
-          - "Office ........... {{ 'OK' if (resultado_office is defined and resultado_office is success) else 'FALHOU' }}"
+          - "AnyDesk .......... {{ 'JÁ INSTALADO' if anydesk_instalado.stat.exists else ('OK' if (resultado_anydesk is defined and resultado_anydesk is succeeded) else 'FALHOU') }}"
+          - "BitDefender ..... {{ 'OK' if (resultado_bitdefender is defined and resultado_bitdefender is succeeded) else 'FALHOU' }}"
+          - "WatchGuard EDR ... {{ 'OK' if (resultado_watchguard is defined and resultado_watchguard is succeeded) else 'FALHOU' }}"
+          - "Office ........... {{ 'OK' if (resultado_office is defined and resultado_office is succeeded) else 'FALHOU' }}"
+
+    - name: Salvar log da instalação de agentes
+      ansible.builtin.include_tasks: common/write-execution-log.yml
+      vars:
+        log_name: install-agentes
+        log_entries:
+          - "AnyDesk: {{ 'JÁ INSTALADO' if anydesk_instalado.stat.exists else ('OK' if (resultado_anydesk is defined and resultado_anydesk is succeeded) else 'FALHOU') }}"
+          - "BitDefender: {{ 'OK' if (resultado_bitdefender is defined and resultado_bitdefender is succeeded) else 'FALHOU' }}"
+          - "WatchGuard EDR: {{ 'OK' if (resultado_watchguard is defined and resultado_watchguard is succeeded) else 'FALHOU' }}"
+          - "Microsoft 365: {{ 'OK' if (resultado_office is defined and resultado_office is succeeded) else 'FALHOU' }}"

@@ -2,11 +2,14 @@
 - name: Instalar Oracle Client 10G
   hosts: windows
   gather_facts: false
+  serial: 1
 
   vars:
-    origem_instaladores: "/opt/ansible/files/sistema/oracle"
+    origem_instaladores: "{{ files_root }}/sistema/oracle"
     oracle_zip: "client-oracle-10g.zip"
     oracle_bat: "install-oracle-10g.bat"
+    destino_logs_local: "{{ local_log_dir }}/{{ inventory_hostname }}"
+    oracle_install_timeout: 1200
 
   tasks:
 
@@ -36,19 +39,210 @@
       register: resultado_copia_bat
       when: resultado_unzip is success
 
-    - name: Executar instalação Oracle
+    - name: Desabilitar o assistente interativo de rede do Oracle
+      ansible.windows.win_shell: |
+        $responseFile = 'C:\temp\client-oracle-10g\response\cooper.rsp'
+        $content = Get-Content -LiteralPath $responseFile -Raw
+        $updated = [regex]::Replace($content, '(?m)^b_launchNETCA\s*=\s*.*$', 'b_launchNETCA=false')
+
+        if ($updated -eq $content) {
+          'unchanged'
+        } else {
+          Set-Content -LiteralPath $responseFile -Value $updated -NoNewline -Encoding Default
+          'changed'
+        }
+      register: resultado_response_file
+      changed_when: resultado_response_file.stdout is search('changed')
+      when: resultado_unzip is success
+
+    - name: Tratar verificação legada de versão do Windows no instalador Oracle
+      ansible.windows.win_shell: |
+        $prereqFiles = @(
+          'C:\temp\client-oracle-10g\stage\prereq\client\client_prereq.xml',
+          'C:\temp\client-oracle-10g\stage\prereq\client_prereqs\client\client_prereq.xml'
+        )
+        $changed = $false
+
+        foreach ($prereqFile in $prereqFiles) {
+          if (Test-Path -LiteralPath $prereqFile) {
+            $content = Get-Content -LiteralPath $prereqFile -Raw
+            $updated = [regex]::Replace(
+              $content,
+              '(?m)(<PREREQUISITEREF NAME="CertifiedVersions" SEVERITY=")Error("/>)',
+              '$1Warning$2'
+            )
+            if ($updated -ne $content) {
+              [System.IO.File]::WriteAllText($prereqFile, $updated, [System.Text.Encoding]::UTF8)
+              $changed = $true
+            }
+          }
+        }
+
+        if ($changed) { 'changed' } else { 'unchanged' }
+      register: resultado_prereq_legado
+      changed_when: resultado_prereq_legado.stdout is search('changed')
+      when: resultado_unzip is success
+
+    - name: Verificar se existe uma instalação Oracle completa
+      ansible.windows.win_stat:
+        path: 'C:\oracle\product\10.2.0\client_1\bin\sqlplus.exe'
+      register: stat_oracle_antes
+
+    - name: Remover Oracle Home incompleto de tentativa anterior
+      ansible.windows.win_file:
+        path: 'C:\oracle\product\10.2.0\client_1'
+        state: absent
+      when: not stat_oracle_antes.stat.exists
+
+    - name: Executar instalacao Oracle com response file
       ansible.windows.win_command: "{{ oracle_bat }}"
       args:
         chdir: 'C:\temp\client-oracle-10g'
         creates: 'C:\oracle\product\10.2.0\client_1\bin\sqlplus.exe'
-      async: 1800
-      poll: 15
+      async: "{{ oracle_install_timeout }}"
+      poll: 30
       register: resultado_oracle
+      failed_when: false
       when: resultado_copia_bat is success
+
+    - name: Validar instalação do Oracle Client
+      ansible.windows.win_stat:
+        path: 'C:\oracle\product\10.2.0\client_1\bin\sqlplus.exe'
+      register: stat_oracle_instalado
+
+    - name: Validar instalação do utilitário TNSPING
+      ansible.windows.win_stat:
+        path: 'C:\oracle\product\10.2.0\client_1\bin\tnsping.exe'
+      register: stat_tnsping_instalado
+
+    - name: Verificar e coletar logs antes da validação final
+      block:
+        - name: Verificar log de execução do script
+          ansible.windows.win_stat:
+            path: 'C:\temp\client-oracle-10g\install-oracle-10g-run.log'
+          register: stat_log_bat_previo
+
+        - name: Verificar log do Oracle Universal Installer
+          ansible.windows.win_stat:
+            path: 'C:\temp\client-oracle-10g\oui-installActions.log'
+          register: stat_log_oui_previo
+
+        - name: Garantir diretório de logs no controlador
+          ansible.builtin.file:
+            path: "{{ destino_logs_local }}"
+            state: directory
+          delegate_to: localhost
+
+        - name: Buscar log do script antes da validação final
+          ansible.builtin.fetch:
+            src: 'C:\temp\client-oracle-10g\install-oracle-10g-run.log'
+            dest: '{{ destino_logs_local }}/oracle-10g-run.log'
+            flat: true
+          when: stat_log_bat_previo.stat.exists
+
+        - name: Buscar log do OUI antes da validação final
+          ansible.builtin.fetch:
+            src: 'C:\temp\client-oracle-10g\oui-installActions.log'
+            dest: '{{ destino_logs_local }}/oracle-10g-oui.log'
+            flat: true
+          when: stat_log_oui_previo.stat.exists
+
+        - name: Preparar log do inventário central antes da validação final
+          ansible.windows.win_shell: |
+            $source = Get-ChildItem 'C:\Program Files (x86)\Oracle\Inventory\logs' -Filter 'installActions*.log' -File -ErrorAction SilentlyContinue |
+              Sort-Object LastWriteTime -Descending |
+              Select-Object -First 1
+            if ($null -ne $source) {
+              Copy-Item -LiteralPath $source.FullName -Destination 'C:\temp\client-oracle-10g\oracle-inventory-installActions.log' -Force
+              $source.FullName
+            }
+          register: resultado_log_inventory_previo
+          changed_when: false
+
+        - name: Buscar log do inventário central antes da validação final
+          ansible.builtin.fetch:
+            src: 'C:\temp\client-oracle-10g\oracle-inventory-installActions.log'
+            dest: '{{ destino_logs_local }}/oracle-inventory-installActions.log'
+            flat: true
+          when: resultado_log_inventory_previo.stdout | trim | length > 0
+
+    - name: Falhar se Oracle Client não estiver instalado
+      ansible.builtin.assert:
+        that:
+          - stat_oracle_instalado.stat.exists
+          - stat_tnsping_instalado.stat.exists
+        fail_msg: 'Oracle Client 10G ou o utilitário TNSPING não foi encontrado após a execução do instalador.'
+
+    - name: Configurar ambiente do Oracle Client instalado
+      ansible.builtin.include_tasks: ../common/configure-oracle-environment.yml
+
+    - name: Verificar se log de execução do .bat existe
+      ansible.windows.win_stat:
+        path: 'C:\temp\client-oracle-10g\install-oracle-10g-run.log'
+      register: stat_log_bat
+
+    - name: Verificar se log do OUI (Oracle Universal Installer) existe
+      ansible.windows.win_stat:
+        path: 'C:\temp\client-oracle-10g\oui-installActions.log'
+      register: stat_log_oui
+
+    - name: Preparar log mais recente do inventário central do Oracle
+      ansible.windows.win_shell: |
+        $source = Get-ChildItem 'C:\Program Files (x86)\Oracle\Inventory\logs' -Filter 'installActions*.log' -File -ErrorAction SilentlyContinue |
+          Sort-Object LastWriteTime -Descending |
+          Select-Object -First 1
+        if ($null -ne $source) {
+          Copy-Item -LiteralPath $source.FullName -Destination 'C:\temp\client-oracle-10g\oracle-inventory-installActions.log' -Force
+          $source.FullName
+        }
+      register: resultado_log_inventory
+      changed_when: false
+
+    - name: Buscar log do inventário central do Oracle
+      ansible.builtin.fetch:
+        src: 'C:\temp\client-oracle-10g\oracle-inventory-installActions.log'
+        dest: '{{ destino_logs_local }}/oracle-inventory-installActions.log'
+        flat: true
+      when: resultado_log_inventory.stdout | trim | length > 0
+
+    - name: Criar pasta local para logs
+      ansible.builtin.file:
+        path: "{{ destino_logs_local }}"
+        state: directory
+      delegate_to: localhost
+      run_once: true
+
+    - name: Buscar log de execução do .bat
+      ansible.builtin.fetch:
+        src: 'C:\temp\client-oracle-10g\install-oracle-10g-run.log'
+        dest: '{{ destino_logs_local }}/oracle-10g-run.log'
+        flat: true
+      when: stat_log_bat.stat.exists
+
+    - name: Buscar log do OUI
+      ansible.builtin.fetch:
+        src: 'C:\temp\client-oracle-10g\oui-installActions.log'
+        dest: '{{ destino_logs_local }}/oracle-10g-oui.log'
+        flat: true
+      when: stat_log_oui.stat.exists
 
     - name: Relatório de instalação
       ansible.builtin.debug:
         msg:
-          - "Cópia do ZIP ........ OK"
-          - "Descompactação ....... OK"
+          - "Cópia do ZIP ........ {{ 'OK' if resultado_copia_zip is succeeded else 'FALHOU' }}"
+          - "Descompactação ....... {{ 'OK' if resultado_unzip is succeeded else 'FALHOU' }}"
           - "Instalação Oracle .... {{ 'OK' if resultado_oracle is success else 'FALHOU' }}"
+          - "Log do .bat encontrado ... {{ 'SIM' if stat_log_bat.stat.exists else 'NÃO' }}"
+          - "Log do OUI encontrado .... {{ 'SIM' if stat_log_oui.stat.exists else 'NÃO' }}"
+          - "Logs salvos em ....... {{ destino_logs_local }}/"
+
+    - name: Salvar log da instalação do Oracle Client
+      ansible.builtin.include_tasks: ../common/write-execution-log.yml
+      vars:
+        log_name: install-oracle-10g
+        log_entries:
+          - "Cópia do ZIP: {{ 'OK' if resultado_copia_zip is succeeded else 'FALHOU' }}"
+          - "Descompactação: {{ 'OK' if resultado_unzip is succeeded else 'FALHOU' }}"
+          - "Instalação Oracle: {{ 'OK' if stat_oracle_instalado.stat.exists else 'FALHOU' }}"
+          - "TNSPING instalado: {{ 'OK' if stat_tnsping_instalado.stat.exists else 'FALHOU' }}"
+          - "Log do instalador: {{ 'SIM' if stat_log_bat.stat.exists else 'NÃO' }}"

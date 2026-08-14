@@ -2,9 +2,10 @@
 - name: Aplicar configuração 64BITS
   hosts: windows
   gather_facts: false
+  serial: 1
 
   vars:
-    origem_instaladores: "/opt/ansible/files/sistema"
+    origem_instaladores: "{{ files_root }}/sistema"
     reg_origem: "{{ origem_instaladores }}/files-sft/64BITS.reg"
 
   tasks:
@@ -28,3 +29,11 @@
         msg:
           - 'Arquivo .reg copiado .................. {{ "OK" if resultado_copia is succeeded else "FALHOU" }}'
           - 'Registro importado .................... {{ "OK" if resultado_reg is succeeded else "FALHOU" }}'
+
+    - name: Salvar log da configuração de registro
+      ansible.builtin.include_tasks: ../common/write-execution-log.yml
+      vars:
+        log_name: edit-reg
+        log_entries:
+          - "Arquivo .reg copiado: {{ 'OK' if resultado_copia is succeeded else 'FALHOU' }}"
+          - "Registro importado: {{ 'OK' if resultado_reg is succeeded else 'FALHOU' }}"

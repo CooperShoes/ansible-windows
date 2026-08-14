@@ -3,36 +3,60 @@
 - name: Instalar Orant
   hosts: windows
   gather_facts: false
+  serial: 1
 
   vars:
-    origem_instaladores: "/opt/ansible/files/sistema/orant"
+    origem_instaladores: "{{ files_root }}/sistema/orant"
     orant_zip: "orant.zip"
 
   tasks:
     - name: Criar pasta temporária de instalação
-      win_file:
+      ansible.windows.win_file:
         path: C:\Temp
         state: directory
-      ignore_errors: true
 
     - name: Copiar zip do Orant
-      win_copy:
+      ansible.windows.win_copy:
         src: "{{ origem_instaladores }}/{{ orant_zip }}"
         dest: 'C:\Temp\{{ orant_zip }}'
       register: resultado_copia_zip
-      ignore_errors: true
 
-    - name: Descompactar arquivo direto em C:\
+    - name: Descompactar arquivo em diretório temporário controlado
       community.windows.win_unzip:
         src: 'C:\Temp\{{ orant_zip }}'
-        dest: 'C:\'
-        delete_archive: true
+        dest: 'C:\Temp\orant-extraido'
+        delete_archive: false
       register: resultado_unzip
-      ignore_errors: true
       when: resultado_copia_zip is success
 
+    - name: Validar conteúdo esperado do Orant
+      ansible.windows.win_stat:
+        path: 'C:\Temp\orant-extraido\orant\BIN\SQLPLUS.EXE'
+      register: stat_orant_extraido
+
+    - name: Instalar Orant no destino definitivo
+      ansible.windows.win_command: 'robocopy C:\Temp\orant-extraido\orant C:\orant /E /NFL /NDL /NJH /NJS /NP'
+      register: resultado_orant
+      changed_when: resultado_orant.rc in [0, 1]
+      failed_when: resultado_orant.rc > 1
+      when: stat_orant_extraido.stat.exists
+
+    - name: Falhar se o pacote Orant não possuir o executável esperado
+      ansible.builtin.assert:
+        that: stat_orant_extraido.stat.exists
+        fail_msg: 'O ZIP do Orant não contém orant\\BIN\\SQLPLUS.EXE no caminho esperado.'
+
     - name: Relatório de instalação
-      debug:
+      ansible.builtin.debug:
         msg:
           - "Cópia do ZIP ..... {{ 'OK' if (resultado_copia_zip is defined and resultado_copia_zip is success) else 'FALHOU' }}"
           - "Descompactação .... {{ 'OK' if (resultado_unzip is defined and resultado_unzip is success) else 'FALHOU' }}"
+
+    - name: Salvar log da instalação do Orant
+      ansible.builtin.include_tasks: ../common/write-execution-log.yml
+      vars:
+        log_name: install-orant
+        log_entries:
+          - "Cópia do ZIP: {{ 'OK' if resultado_copia_zip is succeeded else 'FALHOU' }}"
+          - "Descompactação: {{ 'OK' if resultado_unzip is succeeded else 'FALHOU' }}"
+          - "Orant instalado em C:\\orant: {{ 'OK' if resultado_orant is succeeded else 'FALHOU' }}"

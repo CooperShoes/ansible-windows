@@ -1,0 +1,25 @@
+# /opt/ansible/playbooks/config-pastas.yml
+---
+- name: Configurações padrão de pastas e arquivos
+  hosts: windows
+  gather_facts: false
+  serial: 1
+
+  tasks:
+    - name: Criar C:\temp
+      ansible.windows.win_file:
+        path: C:\temp
+        state: directory
+
+    - name: Criar C:\lixo
+      ansible.windows.win_file:
+        path: C:\lixo
+        state: directory
+
+    - name: Salvar log da configuração de pastas
+      ansible.builtin.include_tasks: common/write-execution-log.yml
+      vars:
+        log_name: config-pastas
+        log_entries:
+          - 'C:\\temp: ok'
+          - 'C:\\lixo: ok'
